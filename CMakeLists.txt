@@ -18,21 +18,44 @@
 cmake_minimum_required(VERSION 2.8.11)
 set(JOB_SLOT_RES_PROJ "xilinx-u30-jobslotreservation")
 set(JOB_SLOT_BINARY_NAME "jobSlotReservation")
-set(JOB_SLOT_RES_VERSION "1.1.0")
+set(JOB_SLOT_RES_VERSION "1.1.1")
 
 find_program(UNAME_EXEC uname)
 find_program(LSB_RELEASE_EXEC lsb_release)
 
-# Grab Arch information like x86-64
-execute_process(COMMAND ${UNAME_EXEC} -p
-    OUTPUT_VARIABLE UNAME_ARCHTYPE
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LSB_RELEASE_EXEC} -is
+    OUTPUT_VARIABLE LINUX_FLAVOR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if (${LINUX_FLAVOR} MATCHES "^(Ubuntu|Debian)")
+        # amd64
+        execute_process(
+        COMMAND dpkg --print-architecture
+        OUTPUT_VARIABLE CPACK_ARCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+elseif (${LINUX_FLAVOR} MATCHES "^(RedHat|CentOS|Amazon|Fedora|SUSE)")
+        # x86_64
+        execute_process(
+        COMMAND uname -m
+        OUTPUT_VARIABLE CPACK_ARCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+else()
+        message( SEND_ERROR "Trying to build on incompatible system \"${LINUX_FLAVOR}\"." )
+endif()
+
 # Grab OS release short name
 execute_process(COMMAND ${LSB_RELEASE_EXEC} -rs
-	OUTPUT_VARIABLE LSB_RELEASE_REL_SHORT
-	OUTPUT_STRIP_TRAILING_WHITESPACE)
+        OUTPUT_VARIABLE LSB_RELEASE_REL_SHORT
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-set(JOB_SLOT_RES_PROJ_FULL_NAME "${JOB_SLOT_RES_PROJ}_${JOB_SLOT_RES_VERSION}_${LSB_RELEASE_REL_SHORT}-${UNAME_ARCHTYPE}")
+if (${LINUX_FLAVOR} MATCHES "^Amazon")
+        set(LSB_RELEASE_REL_SHORT "amzn${LSB_RELEASE_REL_SHORT}")
+endif()
+
+set(JOB_SLOT_RES_PROJ_FULL_NAME "${JOB_SLOT_RES_PROJ}_${JOB_SLOT_RES_VERSION}_${LSB_RELEASE_REL_SHORT}-${CPACK_ARCH}")
 
 project(${JOB_SLOT_RES_PROJ})
 
@@ -52,6 +75,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_FLAGS	"${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -DDSA64 -fpermissive")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_FILE_LICENSE_PATH "/usr/share/doc/xilinx/u30")
 
 add_executable(${JOB_SLOT_BINARY_NAME} jobSlot_reservation.cpp )
 
@@ -65,6 +90,7 @@ target_link_libraries(${JOB_SLOT_BINARY_NAME} ${LIBXRM_LDFLAGS}
 
 # Set the location for library installation
 install(TARGETS ${JOB_SLOT_BINARY_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(FILES ${CPACK_RESOURCE_FILE_LICENSE} CONFIGURATIONS Release RUNTIME DESTINATION ${CPACK_FILE_LICENSE_PATH}/${JOB_SLOT_RES_PROJ})
 
 # Packaging section
 set(CPACK_PACKAGE_NAME ${JOB_SLOT_RES_PROJ})
@@ -74,7 +100,7 @@ set(CPACK_PACKAGE_CONTACT "Rohit Athavale <rohit.athavale@xilinx.com>")
 set(CPACK_PACKAGE_VENDOR "Xilinx")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Xilinx JobSlotReservation")
 set(CPACK_PACKAGE_DESCRIPTION "The Xilinx JobSlotReservation is used to reserve job slots based on the describe job using XRM.")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "xrt (>= 2.11), xrm (>= 1.3), libboost-thread-dev ")
-set(CPACK_RPM_PACKAGE_DEPENDS "xrt (>= 2.11), xrm (>= 1.3), libboost-thread1.58.0 ")
-set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/xilinx" "/usr/lib" "/usr/lib/pkgconfig")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "xrt (>= 2.11), xrm (>= 1.3), xilinx-u30-xffmpeg (>= 4.4.xlnx.2), libboost-thread-dev ")
+set(CPACK_RPM_PACKAGE_REQUIRES    "xrt  >= 2.11,  xrm  >= 1.3,  xilinx-u30-xffmpeg  >= 4.4.xlnx.2, boost-thread ")
+set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/opt" "/opt/xilinx" "/usr/lib" "/usr/lib/pkgconfig" "/usr/share/doc/xilinx" "/usr/share/doc/xilinx/u30")
 include(CPack)
